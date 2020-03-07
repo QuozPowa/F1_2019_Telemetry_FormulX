@@ -41,8 +41,19 @@ var PACKETS = constants.PACKETS, SESSION_TYPES = constants.SESSION_TYPES, TEAMS 
 var client = new F1TelemetryClient();
 var driversource_1 = require("../IntercoApp/app/driversource");
 var discordcustom_1 = require("../IntercoApp/app/discordcustom");
+function fmtMSS(timeInSeconds) {
+    var pad = function (num, size) { return ('000' + num).slice(size * -1); };
+    var time = parseFloat(timeInSeconds.toFixed(3));
+    var minutes = Math.floor(time / 60) % 60;
+    var seconds = Math.floor(time - minutes * 60);
+    console.log(time.toString());
+    var milliseconds = time.toString().slice(-3);
+    console.log(milliseconds);
+    return pad(minutes, 2) + ':' + pad(seconds, 2) + ',' + pad(milliseconds, 3);
+}
 var discord_custom = new discordcustom_1.DiscordCustom();
 var channelID = "676886528785645578";
+var best_times = {};
 var drivers_data;
 function main() {
     return __awaiter(this, void 0, void 0, function () {
@@ -70,22 +81,10 @@ main();
 var participants = [];
 var lapData = [];
 var callEvent = function (data) {
-    var mydata = [];
-    for (var _i = 0, participants_1 = participants; _i < participants_1.length; _i++) {
-        var p = participants_1[_i];
-        var m_name = '';
-        if (p.m_raceNumber.toString() in drivers_data) {
-            m_name = drivers_data[p.m_raceNumber];
-        }
-        else {
-            m_name = p.m_name;
-        }
-        mydata.push({ "m_name": m_name, "m_raceNumber": p.m_raceNumber, "m_teamId": TEAMS[p.m_teamId].name });
-    }
     var i = 0;
-    for (var _a = 0, lapData_1 = lapData; _a < lapData_1.length; _a++) {
-        var l = lapData_1[_a];
-        var myonedata = mydata[i];
+    for (var _i = 0, lapData_1 = lapData; _i < lapData_1.length; _i++) {
+        var l = lapData_1[_i];
+        var myonedata = participants_data[i];
         myonedata.m_gridPosition = l.m_gridPosition + 1;
         myonedata.m_carPosition = l.m_carPosition;
         myonedata.m_penalties = l.m_penalties;
@@ -93,13 +92,16 @@ var callEvent = function (data) {
         myonedata.m_currentLapNum = l.m_currentLapNum;
         i++;
     }
+    if (data.m_eventStringCode === "SSTA") {
+        best_times = {};
+    }
     var date = new Date();
     if (["SEND", "CHQF", "RCWN"].includes(data.m_eventStringCode)) {
         var msgs = [];
         msgs.push('**Event : ' + data.m_eventStringCode + ' ' + date.getHours().toString().slice(-2) + 'h' + date.getMinutes().toString().slice(-2) + ' - Session ' + SESSION_TYPES[sessionType] + ' ' + totalLaps + ' tours**');
-        mydata.sort(keysrt('m_carPosition'));
-        for (var _b = 0, mydata_1 = mydata; _b < mydata_1.length; _b++) {
-            var driver = mydata_1[_b];
+        participants_data.sort(keysrt('m_carPosition'));
+        for (var _a = 0, participants_data_1 = participants_data; _a < participants_data_1.length; _a++) {
+            var driver = participants_data_1[_a];
             if (driver.m_carPosition) {
                 msgs.push(driver.m_carPosition + '. ' + driver.m_name + ' - ' + driver.m_teamId + ' (Tour ' + driver.m_currentLapNum + ', grille ' + driver.m_gridPosition + ', pénalités ' + driver.m_penalties + 's)');
             }
@@ -125,10 +127,38 @@ var callSession = function (data) {
 };
 client.on(PACKETS.session, callSession);
 var setLapData = function (data) {
+    if (!participants_data) {
+        return;
+    }
     lapData = data.m_lapData;
+    var i = 0;
+    for (var _i = 0, lapData_2 = lapData; _i < lapData_2.length; _i++) {
+        var l = lapData_2[_i];
+        if (l.m_lastLapTime && (!(i in best_times) || l.m_lastLapTime < best_times[i])) {
+            best_times[i] = l.m_lastLapTime;
+            var msgs = [];
+            console.log(best_times[i]);
+            msgs.push(participants_data[i].m_name + ' vient de PB en ' + fmtMSS(best_times[i]) + '. Il est P' + l.m_carPosition + '.');
+            discord_custom.sendMsgs(channelID, msgs);
+        }
+        i++;
+    }
 };
+var participants_data;
 var setParticipants = function (data) {
     participants = data.m_participants;
+    participants_data = [];
+    for (var _i = 0, participants_1 = participants; _i < participants_1.length; _i++) {
+        var p = participants_1[_i];
+        var m_name = '';
+        if (p.m_raceNumber.toString() in drivers_data) {
+            m_name = drivers_data[p.m_raceNumber];
+        }
+        else {
+            m_name = p.m_name;
+        }
+        participants_data.push({ "m_name": m_name, "m_raceNumber": p.m_raceNumber, "m_teamId": TEAMS[p.m_teamId].name });
+    }
 };
 client.on(PACKETS.lapData, setLapData);
 client.on(PACKETS.participants, setParticipants);
