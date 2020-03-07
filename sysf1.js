@@ -46,9 +46,7 @@ function fmtMSS(timeInSeconds) {
     var time = parseFloat(timeInSeconds.toFixed(3));
     var minutes = Math.floor(time / 60) % 60;
     var seconds = Math.floor(time - minutes * 60);
-    console.log(time.toString());
     var milliseconds = time.toString().slice(-3);
-    console.log(milliseconds);
     return pad(minutes, 2) + ':' + pad(seconds, 2) + ',' + pad(milliseconds, 3);
 }
 var discord_custom = new discordcustom_1.DiscordCustom();
@@ -137,7 +135,6 @@ var setLapData = function (data) {
         if (l.m_lastLapTime && (!(i in best_times) || l.m_lastLapTime < best_times[i])) {
             best_times[i] = l.m_lastLapTime;
             var msgs = [];
-            console.log(best_times[i]);
             msgs.push(participants_data[i].m_name + ' vient de PB en ' + fmtMSS(best_times[i]) + '. Il est P' + l.m_carPosition + '.');
             discord_custom.sendMsgs(channelID, msgs);
         }
