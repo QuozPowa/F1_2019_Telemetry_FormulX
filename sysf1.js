@@ -1,4 +1,6 @@
 "use strict";
+// Developped by QuozGaming
+// https://www.quozpowa.com
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -37,8 +39,74 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 };
 exports.__esModule = true;
 var _a = require('f1-telemetry-client'), F1TelemetryClient = _a.F1TelemetryClient, constants = _a.constants;
-var PACKETS = constants.PACKETS, SESSION_TYPES = constants.SESSION_TYPES, TEAMS = constants.TEAMS;
+var PACKETS = constants.PACKETS, SESSION_TYPES = constants.SESSION_TYPES, TEAMS = constants.TEAMS, SAFETY_CAR_STATUSES = constants.SAFETY_CAR_STATUSES, TYRES = constants.TYRES;
 var client = new F1TelemetryClient();
+var sessionData = { "sessionType": "", "m_sessionTimeLeft": 0, "m_safetyCarStatus": 0, "totalLaps": 0 };
+var session = '';
+var yellow_flag;
+var express = require('express');
+var app = express();
+app.set('view engine', 'ejs');
+var participants_data = [];
+app.get('/', function (req, res) {
+    res.render(__dirname + "/classement.ejs");
+});
+app.get('/data', function (req, res) {
+    var result = participants_data.slice();
+    var result_final = [];
+    for (var _i = 0, _a = Object.entries(result); _i < _a.length; _i++) {
+        var _b = _a[_i], i = _b[0], res_1 = _b[1];
+        res_1.m_lastLapTime = best_times[i];
+        if (res_1.m_carPosition) {
+            result_final.push(res_1);
+        }
+    }
+    result_final.sort(keysrt('m_carPosition'));
+    for (var _c = 0, _d = Object.entries(result_final); _c < _d.length; _c++) {
+        var _e = _d[_c], i = _e[0], res_2 = _e[1];
+        var index_i = parseInt(i);
+        if (index_i == 0) {
+            if (session === 'R') {
+                res_2.info = "L" + res_2.m_currentLapNum;
+            }
+            else {
+                if (res_2.m_lastLapTime) {
+                    res_2.info = fmtMSS(res_2.m_lastLapTime);
+                }
+            }
+        }
+        if (index_i > 0) {
+            if (session === 'R') {
+                if (res_2.m_resultStatus === 4) {
+                    res_2.info = 'DSQ';
+                }
+                else if (res_2.m_resultStatus === 6) {
+                    res_2.info = 'DNF';
+                }
+                else if (result_final[0].m_currentLapNum - res_2.m_currentLapNum > 1) {
+                    res_2.info = '+' + (result_final[0].m_currentLapNum - res_2.m_currentLapNum) + ' L';
+                }
+                else {
+                    res_2.gap = ((result_final[index_i - 1].m_totalDistance - result_final[index_i].m_totalDistance) / 63).toFixed(3);
+                    res_2.info = '+' + res_2.gap + ' s';
+                }
+            }
+            else {
+                if (result_final[0].m_lastLapTime && result_final[index_i].m_lastLapTime) {
+                    res_2.gap = (parseFloat(result_final[index_i].m_lastLapTime) - parseFloat(result_final[0].m_lastLapTime)).toFixed(3);
+                    res_2.info = '+' + res_2.gap + ' s';
+                }
+            }
+        }
+    }
+    var totalSeconds = sessionData.m_sessionTimeLeft;
+    var minutes = Math.floor(totalSeconds / 60);
+    var seconds = totalSeconds % 60;
+    var m_sessionTimeLeft = minutes + ':' + seconds;
+    var sc_status = SAFETY_CAR_STATUSES[sessionData.m_safetyCarStatus];
+    res.json({ result: result_final, yellow_flag: yellow_flag, session: session, m_sessionTimeLeft: m_sessionTimeLeft, sc_status: sc_status, sc_status_id: sessionData.m_safetyCarStatus });
+});
+app.listen(3000);
 var driversource_1 = require("../IntercoApp/app/driversource");
 var discordcustom_1 = require("../IntercoApp/app/discordcustom");
 function fmtMSS(timeInSeconds) {
@@ -46,13 +114,15 @@ function fmtMSS(timeInSeconds) {
     var time = parseFloat(timeInSeconds.toFixed(3));
     var minutes = Math.floor(time / 60) % 60;
     var seconds = Math.floor(time - minutes * 60);
-    var milliseconds = time.toString().slice(-3);
+    var time_toString = time.toString();
+    var milliseconds = time_toString.slice(-3);
     return pad(minutes, 2) + ':' + pad(seconds, 2) + ',' + pad(milliseconds, 3);
 }
 var discord_custom = new discordcustom_1.DiscordCustom();
 var channelID = "676886528785645578";
 var best_times = {};
-var drivers_data;
+var m_bestLapTime = 100000;
+var drivers_data = {};
 function main() {
     return __awaiter(this, void 0, void 0, function () {
         var driver_source, e_1;
@@ -92,14 +162,16 @@ var callEvent = function (data) {
     }
     if (data.m_eventStringCode === "SSTA") {
         best_times = {};
+        m_bestLapTime = 100000;
     }
     var date = new Date();
+    var result = participants_data.slice();
     if (["SEND", "CHQF", "RCWN"].includes(data.m_eventStringCode)) {
         var msgs = [];
-        msgs.push('**Event : ' + data.m_eventStringCode + ' ' + date.getHours().toString().slice(-2) + 'h' + date.getMinutes().toString().slice(-2) + ' - Session ' + SESSION_TYPES[sessionType] + ' ' + totalLaps + ' tours**');
-        participants_data.sort(keysrt('m_carPosition'));
-        for (var _a = 0, participants_data_1 = participants_data; _a < participants_data_1.length; _a++) {
-            var driver = participants_data_1[_a];
+        msgs.push('**Event : ' + data.m_eventStringCode + ' ' + date.getHours().toString().slice(-2) + 'h' + date.getMinutes().toString().slice(-2) + ' - Session ' + SESSION_TYPES[sessionData.sessionType] + ' ' + sessionData.totalLaps + ' tours**');
+        result.sort(keysrt('m_carPosition'));
+        for (var _a = 0, result_1 = result; _a < result_1.length; _a++) {
+            var driver = result_1[_a];
             if (driver.m_carPosition) {
                 msgs.push(driver.m_carPosition + '. ' + driver.m_name + ' - ' + driver.m_teamId + ' (Tour ' + driver.m_currentLapNum + ', grille ' + driver.m_gridPosition + ', pénalités ' + driver.m_penalties + 's)');
             }
@@ -117,11 +189,19 @@ function keysrt(key) {
     };
 }
 client.on(PACKETS.event, callEvent);
-var totalLaps;
-var sessionType;
 var callSession = function (data) {
-    totalLaps = data.m_totalLaps;
-    sessionType = data.m_sessionType;
+    sessionData.totalLaps = data.m_totalLaps;
+    sessionData.sessionType = data.m_sessionType;
+    sessionData.m_sessionTimeLeft = data.m_sessionTimeLeft;
+    sessionData.m_safetyCarStatus = data.m_safetyCarStatus;
+    yellow_flag = false;
+    for (var _i = 0, _a = data.m_marshalZones; _i < _a.length; _i++) {
+        var m = _a[_i];
+        if (m.m_zoneFlag === 3) {
+            yellow_flag = true;
+        }
+    }
+    session = SESSION_TYPES[sessionData.sessionType];
 };
 client.on(PACKETS.session, callSession);
 var setLapData = function (data) {
@@ -132,32 +212,80 @@ var setLapData = function (data) {
     var i = 0;
     for (var _i = 0, lapData_2 = lapData; _i < lapData_2.length; _i++) {
         var l = lapData_2[_i];
-        if (l.m_lastLapTime && (!(i in best_times) || l.m_lastLapTime < best_times[i])) {
-            best_times[i] = l.m_lastLapTime;
-            var msgs = [];
-            msgs.push(participants_data[i].m_name + ' vient de PB en ' + fmtMSS(best_times[i]) + '. Il est P' + l.m_carPosition + '.');
-            discord_custom.sendMsgs(channelID, msgs);
+        if (participants_data[i]) {
+            var myonedata = participants_data[i];
+            myonedata.m_carPosition = l.m_carPosition;
+            myonedata.m_totalDistance = l.m_totalDistance;
+            myonedata.m_pitStatus = l.m_pitStatus;
+            myonedata.m_driverStatus = l.m_driverStatus;
+            myonedata.m_resultStatus = l.m_resultStatus;
+            myonedata.m_currentLapNum = l.m_currentLapNum;
+            myonedata.m_penalties = l.m_penalties;
+            if (l.m_lastLapTime && (!(i in best_times) || l.m_lastLapTime < best_times[i])) {
+                best_times[i] = l.m_lastLapTime;
+                myonedata.m_lastLapTime = l.m_lastLapTime;
+                var msgs = [];
+                var best_lap = '';
+                if (l.m_lastLapTime <= m_bestLapTime) {
+                    best_lap = '**MEILLEUR TOUR : **';
+                    m_bestLapTime = l.m_lastLapTime;
+                }
+                msgs.push(best_lap + participants_data[i].m_name + ' vient de PB en ' + fmtMSS(best_times[i]) + '. Il est P' + l.m_carPosition + '.');
+                discord_custom.sendMsgs(channelID, msgs);
+            }
         }
         i++;
     }
 };
-var participants_data;
+var setCarStatus = function (data) {
+    var i = 0;
+    for (var _i = 0, _a = data.m_carStatusData; _i < _a.length; _i++) {
+        var c = _a[_i];
+        if (participants_data[i]) {
+            var myonedata = participants_data[i];
+            var m_tyresWear = c.m_tyresWear.toString().split(',');
+            var usure = 0;
+            for (var _b = 0, m_tyresWear_1 = m_tyresWear; _b < m_tyresWear_1.length; _b++) {
+                var tyresWear = m_tyresWear_1[_b];
+                usure = usure + parseInt(tyresWear);
+            }
+            myonedata.m_tyresWear = usure / 4;
+            if (c.m_tyreVisualCompound && c.m_tyreVisualCompound !== 255) {
+                var tyre_name = TYRES[c.m_tyreVisualCompound].name.slice(0, 1);
+                if (TYRES[c.m_tyreVisualCompound].name === 'C5') {
+                    tyre_name = 'S';
+                }
+                else if (TYRES[c.m_tyreVisualCompound].name === 'C4') {
+                    tyre_name = 'M';
+                }
+                else if (TYRES[c.m_tyreVisualCompound].name === 'C3') {
+                    tyre_name = 'H';
+                }
+                myonedata.m_actualTyreCompound = tyre_name;
+            }
+        }
+        i++;
+    }
+};
 var setParticipants = function (data) {
     participants = data.m_participants;
     participants_data = [];
     for (var _i = 0, participants_1 = participants; _i < participants_1.length; _i++) {
         var p = participants_1[_i];
         var m_name = '';
+        var shortname = '';
         if (p.m_raceNumber.toString() in drivers_data) {
-            m_name = drivers_data[p.m_raceNumber];
+            m_name = drivers_data[p.m_raceNumber].fullname;
+            shortname = drivers_data[p.m_raceNumber].shortname;
         }
         else {
             m_name = p.m_name;
         }
-        participants_data.push({ "m_name": m_name, "m_raceNumber": p.m_raceNumber, "m_teamId": TEAMS[p.m_teamId].name });
+        participants_data.push({ "m_name": m_name, "shortname": shortname, "m_raceNumber": p.m_raceNumber, "m_teamId": TEAMS[p.m_teamId].name });
     }
 };
 client.on(PACKETS.lapData, setLapData);
 client.on(PACKETS.participants, setParticipants);
+client.on(PACKETS.carStatus, setCarStatus);
 // to start listening:
 client.start();
