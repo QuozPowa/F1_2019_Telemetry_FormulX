@@ -1,0 +1,229 @@
+<html>
+
+<head>
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js"
+        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+    <script>
+
+        $(function () {
+
+
+            function add_pilote(tab, res, data) {
+
+                res.pit = '';
+                if (res.m_pitStatus > 0 || res.m_driverStatus === 0) {
+                    res.pit = 'P';
+                }
+
+                if (data.session === "R") {
+                    res.penalitesdisp = '';
+                    if (res.m_penalties) {
+                        res.penalitesdisp = '+' + res.m_penalties + 's';
+                    }
+
+                    res.formatedInfo = res.info;
+                    if (res.gap && res.gap < 1) {
+                        res.formatedInfo = '<span style="color:orange">' + res.info + '</span>';
+                    }
+
+                    res.formatedShortname = res.shortname;
+                    if(res.m_raceNumber === data.fastest_driver)
+                    {
+                        res.formatedShortname = '<span style="color:#ff00ff">' + res.shortname + '</span>';
+                    }
+
+                    $("#table" + tab)
+                        .append(
+                            $('<tr>')
+                                .append(
+                                    $('<td>').attr('class', 'num').append(res.m_carPosition)
+                                )
+                                .append(
+                                    $('<td>').append('<strong><span style="color:' + res.m_teamColor + '">|</span></strong>')
+                                )
+                                .append(
+                                    $('<td>').append(res.formatedShortname)
+                                )
+                                .append(
+                                    $('<td>').append(res.formatedInfo)
+                                )
+                                .append(
+                                    $('<td>').append(res.pit)
+                                ).append(
+                                    $('<td>').append('<span style="color:white;border-color:' + res.m_tyreColor + '" class="numberCircle">' + res.m_actualTyreCompound + '</span> (' + res.m_tyresWear + '%)')
+                                ).append(
+                                    $('<td>').append(res.penalitesdisp)
+                                )
+                        );
+                } else {
+                    $("#table" + tab)
+                        .append($('<tr>')
+                            .append(
+                                $('<td>').attr('class', 'num').append(res.m_carPosition)
+                            )
+                            .append(
+                                $('<td>').append('<strong><span style="color:' + res.m_teamColor + '">|</span></strong>')
+                            )
+                            .append(
+                                $('<td>').attr('class', 'pseudo').append(res.shortname)
+                            )
+                            .append(
+                                $('<td>').append(res.info)
+                            )
+                            .append(
+                                $('<td>').append(res.pit)
+                            ).append(
+                                $('<td>').append('<span style="color:white;border-color:' + res.m_tyreColor + '" class="numberCircle">' + res.m_actualTyreCompound + '</span> (' + res.m_tyresWear + '%)')
+                            )
+                        );
+                }
+            }
+
+            function refresh() {
+
+                $.ajax({ url: "/data" }).done(function (data) {
+
+                    let refresh = false;
+                    for (let res of data.result) {
+                        if (res.m_tyresWear !== undefined) {
+                            refresh = true;
+                        }
+                    }
+
+                    if (refresh) {
+                        for (let i = 0; i < (data.result.length / 5) + 1; i++) {
+                            $("#table" + i).html('');
+                        }
+
+                        let tab = 0;
+                        for (let i = 0; i < data.result.length; i++) {
+                            if (i % 5 === 0) {
+                                tab++;
+                            }
+                            add_pilote(tab, data.result[i], data);
+                        }
+
+                    }
+
+                    let session = '';
+
+                    if (data.yellow_flag) {
+                        session += '<span class="yellowflag">';
+
+                        if (data.sc_status_id !== 0) {
+                            session += data.sc_status;
+                        }
+                        session += '</span> ';
+                    }
+                    session += data.session;
+                    if (data.session !== "R") {
+                        session += " - " + data.m_sessionTimeLeft;
+                    }
+                    $('#session').html(session);
+
+                });
+            };
+            refresh();
+            setInterval(function () { refresh(); }, 3000);
+
+        })
+    </script>
+</head>
+
+<body>
+    <style>
+        td {
+            background: black;
+        }
+
+        .num {
+            background: grey;
+            color: white;
+            text-align: center;
+            width: 20px;
+        }
+
+        table {
+            border-collapse: collapse;
+        }
+
+        .table,
+        .table th,
+        .table td {
+            border: 1px solid black;
+        }
+
+        .table {
+            background-color: white;
+            width: 300px;
+        }
+
+        #session {
+            min-height: 20px;
+        }
+
+        .yellowflag {
+            color:black;
+            background-color: yellow;
+            min-width: 16px;
+            min-height: 16px;
+            display: inline-block;
+        }
+
+        .numberCircle {
+            border-radius: 50%;
+            padding: 1px;
+            width:16px;
+            height:16px;
+            display: inline-block;
+
+            border: 2px solid;
+            text-align: center;
+        }
+
+        body {
+            font-family: Roobert, Helvetica Neue, Helvetica, Arial, sans-serif !important;
+            color: white;
+        }
+    </style>
+    <table>
+        <tr>
+            <td>
+                <table id="session">
+
+                </table>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <table class="table" id="table1">
+                    <tbody style="">
+
+                    </tbody>
+                </table>
+            </td>
+            <td>
+                <table class="table" id="table2">
+                    <tbody>
+
+                    </tbody>
+                </table>
+            </td>
+            <td>
+                <table class="table" id="table3">
+                    <tbody>
+                    </tbody>
+                </table>
+            </td>
+            <td>
+                <table class="table" id="table4">
+                    <tbody>
+
+                    </tbody>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+
+</html>

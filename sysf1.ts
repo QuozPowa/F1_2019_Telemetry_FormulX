@@ -9,6 +9,7 @@ const client = new F1TelemetryClient();
 var sessionData = {"sessionType":"","m_sessionTimeLeft":0,"m_safetyCarStatus":0,"totalLaps":0};
 
 let session = '';
+let fastest_driver;
 
 let yellow_flag;
 
@@ -64,12 +65,12 @@ app.get('/data', function (req, res) {
                 }
                 else{
                 res.gap = ((result_final[index_i-1].m_totalDistance-result_final[index_i].m_totalDistance)/63).toFixed(3);
-                res.info = '+'+res.gap+' s';
+                res.info = '+'+res.gap;
                 }
             }else{
                 if(result_final[0].m_lastLapTime && result_final[index_i].m_lastLapTime){
                 res.gap = (parseFloat(result_final[index_i].m_lastLapTime)-parseFloat(result_final[0].m_lastLapTime)).toFixed(3);
-                res.info = '+'+res.gap+' s';
+                res.info = '+'+res.gap;
                 }
             }
         }
@@ -83,7 +84,8 @@ app.get('/data', function (req, res) {
     let m_sessionTimeLeft = minutes+':'+seconds;
     let sc_status = SAFETY_CAR_STATUSES[sessionData.m_safetyCarStatus];
 
-    res.json({ result: result_final, yellow_flag, session, m_sessionTimeLeft, sc_status, sc_status_id:sessionData.m_safetyCarStatus });
+    res.json({ result: result_final, yellow_flag, fastest_driver, session,
+         m_sessionTimeLeft, sc_status, sc_status_id:sessionData.m_safetyCarStatus });
 
     })
 
@@ -244,6 +246,7 @@ var setLapData = function (data) {
                 if (l.m_lastLapTime <= m_bestLapTime) {
                     best_lap = '**MEILLEUR TOUR : **';
                     m_bestLapTime = l.m_lastLapTime;
+                    fastest_driver = myonedata.m_raceNumber;
                 }
                 msgs.push(best_lap + participants_data[i].m_name + ' vient de PB en ' + fmtMSS(best_times[i]) + '. Il est P' + l.m_carPosition + '.');
                 discord_custom.sendMsgs(channelID, msgs);
@@ -267,18 +270,23 @@ var setCarStatus = function(data){
                 usure = usure+parseInt(tyresWear);
             }
 
-            myonedata.m_tyresWear = usure/4;
+            myonedata.m_tyresWear = Math.round(usure/4);
             if(c.m_tyreVisualCompound && c.m_tyreVisualCompound !== 255){
             let tyre_name = TYRES[c.m_tyreVisualCompound].name.slice(0,1);
+            let tyre_color=TYRES[c.m_tyreVisualCompound].color;
             if(TYRES[c.m_tyreVisualCompound].name === 'C5'){
                 tyre_name='S';
+                tyre_color='#f92d29';
             }else if(TYRES[c.m_tyreVisualCompound].name === 'C4'){
                 tyre_name='M';
+                tyre_color='#ebd25f';
             }
             else if(TYRES[c.m_tyreVisualCompound].name === 'C3'){
                 tyre_name='H';
+                tyre_color='#ffffff';
             }
             myonedata.m_actualTyreCompound = tyre_name;
+            myonedata.m_tyreColor = tyre_color;
             }
         }
         i++;
@@ -292,14 +300,14 @@ var setParticipants = function (data) {
     for (let p of participants) {
 
         let m_name = '';
-        let shortname = '';
+        let shortname = 'UKN';
         if (p.m_raceNumber.toString() in drivers_data) {
             m_name = drivers_data[p.m_raceNumber].fullname;
             shortname = drivers_data[p.m_raceNumber].shortname;
         } else {
             m_name = p.m_name;
         }
-        participants_data.push({ "m_name": m_name,"shortname": shortname, "m_raceNumber": p.m_raceNumber, "m_teamId": TEAMS[p.m_teamId].name });
+        participants_data.push({ "m_name": m_name,"shortname": shortname, "m_raceNumber": p.m_raceNumber, "m_teamId": TEAMS[p.m_teamId].name, "m_teamColor": TEAMS[p.m_teamId].color });
 
     }
 }
